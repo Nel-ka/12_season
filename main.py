@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 import cv2
 import numpy as np
 import mediapipe as mp
@@ -10,6 +11,15 @@ from PIL import Image
 
 app = FastAPI()
 
+# Enable CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Load Mediapipe Face Detection
 mp_face_detection = mp.solutions.face_detection
 
@@ -20,7 +30,7 @@ def get_face_region(img):
             bbox = results.detections[0].location_data.relative_bounding_box
             h, w, _ = img.shape
             x1, y1 = int(bbox.xmin * w), int(bbox.ymin * h)
-            x2, y2 = int((bbox.xmin + bbox.width) * w), int((bbox.xmin + bbox.height) * h)
+            x2, y2 = int((bbox.xmin + bbox.width) * w), int((bbox.ymin + bbox.height) * h)
             return (x1, y1, x2, y2)
     return None
 
@@ -121,9 +131,12 @@ def read_root():
 
 @app.get("/analyze/")
 def analyze_image(image_url: str):
-    response = requests.get(image_url)
-    img = np.array(Image.open(BytesIO(response.content)).convert("RGB"))
-    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+    try:
+        response = requests.get(image_url)
+        img = np.array(Image.open(BytesIO(response.content)).convert("RGB"))
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+    except Exception as e:
+        return {"error": f"Failed to load image: {str(e)}"}
 
     face_region = get_face_region(img)
     if not face_region:
