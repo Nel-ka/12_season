@@ -14,7 +14,7 @@ app = FastAPI()
 # Enable CORS (Allow frontend to call the backend)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Change to specific frontend URL for better security
+    allow_origins=["https://www.tailorloop.com"]
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
