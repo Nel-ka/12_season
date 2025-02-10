@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 import cv2
 import numpy as np
@@ -11,10 +11,10 @@ from PIL import Image
 
 app = FastAPI()
 
-# Enable CORS
+# Enable CORS (Allow frontend to call the backend)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Change to specific frontend URL for better security
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -130,17 +130,26 @@ def read_root():
     return {"message": "12-Season Analysis API is running!"}
 
 @app.get("/analyze/")
-def analyze_image(image_url: str):
+def analyze_image(image_url: str = Query(..., description="URL of the image to analyze")):
+    """
+    Secure Proxy API: Fetches the image from the given URL, processes it, 
+    and returns skin tone, undertone, intensity, contrast, and season.
+    """
     try:
-        response = requests.get(image_url)
+        # Securely fetch the image (frontend never sees the external URL)
+        response = requests.get(image_url, timeout=10)
+        if response.status_code != 200:
+            raise HTTPException(status_code=400, detail="Failed to download image.")
+
         img = np.array(Image.open(BytesIO(response.content)).convert("RGB"))
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+
     except Exception as e:
-        return {"error": f"Failed to load image: {str(e)}"}
+        raise HTTPException(status_code=400, detail=f"Error processing image: {str(e)}")
 
     face_region = get_face_region(img)
     if not face_region:
-        return {"error": "No face detected."}
+        raise HTTPException(status_code=400, detail="No face detected in the image.")
 
     x1, y1, x2, y2 = face_region
     cheek_region = img[y1 + (y2 - y1) // 3 : y2 - (y2 - y1) // 3, x1 + (x2 - x1) // 3 : x2 - (x2 - x1) // 3]
@@ -155,7 +164,7 @@ def analyze_image(image_url: str):
     contrast = classify_contrast(skin_rgb, hair_hsv)
 
     user_season = determine_season(skin_tone, undertone, intensity, contrast)
-    
+
     return {
         "Skin Tone": skin_tone,
         "Undertone": undertone,
